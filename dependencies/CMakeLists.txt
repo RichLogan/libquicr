@@ -5,10 +5,6 @@
 # Suppress warnings from dependencies
 # ----------------------------------------------------
 
-# Save current warning flags
-set(SAVED_CMAKE_C_FLAGS "${CMAKE_C_FLAGS}")
-set(SAVED_CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
-
 # Suppress all warnings for dependency code
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
     # For GCC and Clang-based compilers
