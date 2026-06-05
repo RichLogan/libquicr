@@ -67,6 +67,18 @@ TEST_CASE("Token round-trips for each alias type")
         CHECK(span.empty());
         CHECK(out == in);
     }
+
+    SUBCASE("USE_ALIAS carries only an alias")
+    {
+        const Token in{ .alias_type = Token::AliasType::kUseAlias, .token_alias = 5 };
+        Bytes buffer;
+        buffer << in;
+        BytesSpan span{ buffer };
+        Token out{};
+        span = span >> out;
+        CHECK(span.empty());
+        CHECK(out == in);
+    }
 }
 
 const TrackNamespace kTrackNamespaceConf{ FromASCII("conf.example.com"), FromASCII("conf"), FromASCII("1") };
