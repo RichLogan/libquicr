@@ -646,3 +646,51 @@ TEST_CASE("ValidateParameters enforces the allow-list")
         CHECK_NOTHROW(ValidateParameters(params, { ParameterType::kAuthorizationToken }));
     }
 }
+
+TEST_CASE("Subscribe resolves parameters and defaults")
+{
+    using namespace quicr::messages;
+    using namespace quicr::messages::control;
+
+    auto make_payload = [](const Parameters& params) {
+        Bytes payload;
+        payload << RequestID{ 1 };
+        payload << kTrackNamespaceConf;
+        payload << kTrackNameAliceVideo;
+        payload << params;
+        return payload;
+    };
+
+    SUBCASE("defaults apply when parameters omitted")
+    {
+        const auto payload = make_payload(Parameters{});
+        const Subscribe msg{ BytesSpan{ payload } };
+        CHECK(msg.rendezvous_timeout == 0);
+        CHECK(msg.subscriber_priority == 128);
+        CHECK(msg.forward == true);
+        CHECK_FALSE(msg.group_order.has_value());
+        CHECK_FALSE(msg.object_delivery_timeout.has_value());
+        CHECK_FALSE(msg.new_group_request.has_value());
+        CHECK(msg.auth_tokens.empty());
+    }
+
+    SUBCASE("present scalar parameters are resolved")
+    {
+        Parameters params;
+        params.Add(ParameterType::kRendezvousTimeout, std::uint64_t{ 50 });
+        params.Add(ParameterType::kNewGroupRequest, std::uint64_t{ 9 });
+        const auto payload = make_payload(params);
+        const Subscribe msg{ BytesSpan{ payload } };
+        CHECK(msg.rendezvous_timeout == 50);
+        REQUIRE(msg.new_group_request.has_value());
+        CHECK(msg.new_group_request.value() == 9);
+    }
+
+    SUBCASE("a FETCH-only parameter is rejected")
+    {
+        Parameters params;
+        params.Add(ParameterType::kFillTimeout, std::uint64_t{ 10 });
+        const auto payload = make_payload(params);
+        CHECK_THROWS_AS(Subscribe{ BytesSpan{ payload } }, ProtocolViolationException);
+    }
+}
