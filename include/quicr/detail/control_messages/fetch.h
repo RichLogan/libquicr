@@ -73,15 +73,11 @@ namespace quicr::messages::control {
             const auto params = reader.Read<Parameters>();
             reader.ExpectDone();
 
-            ValidateParameters(params,
-                               { ParameterType::kAuthorizationToken,
-                                 ParameterType::kFillTimeout,
-                                 ParameterType::kSubscriberPriority,
-                                 ParameterType::kGroupOrder });
-            p.auth_tokens = CollectAuthTokens(params);
-            p.fill_timeout = params.GetOptional<std::uint64_t>(ParameterType::kFillTimeout);
-            p.subscriber_priority = params.GetOptional<std::uint8_t>(ParameterType::kSubscriberPriority).value_or(128);
-            p.group_order = ResolveGroupOrder(params).value_or(GroupOrder::kAscending);
+            auto fetch_params = ResolveFetchParameters(params);
+            p.auth_tokens = std::move(fetch_params.auth_tokens);
+            p.fill_timeout = fetch_params.fill_timeout;
+            p.subscriber_priority = fetch_params.subscriber_priority;
+            p.group_order = fetch_params.group_order;
             return p;
         }
 
@@ -150,15 +146,11 @@ namespace quicr::messages::control {
             const auto params = reader.Read<Parameters>();
             reader.ExpectDone();
 
-            ValidateParameters(params,
-                               { ParameterType::kAuthorizationToken,
-                                 ParameterType::kFillTimeout,
-                                 ParameterType::kSubscriberPriority,
-                                 ParameterType::kGroupOrder });
-            p.auth_tokens = CollectAuthTokens(params);
-            p.fill_timeout = params.GetOptional<std::uint64_t>(ParameterType::kFillTimeout);
-            p.subscriber_priority = params.GetOptional<std::uint8_t>(ParameterType::kSubscriberPriority).value_or(128);
-            p.group_order = ResolveGroupOrder(params).value_or(GroupOrder::kAscending);
+            auto fetch_params = ResolveFetchParameters(params);
+            p.auth_tokens = std::move(fetch_params.auth_tokens);
+            p.fill_timeout = fetch_params.fill_timeout;
+            p.subscriber_priority = fetch_params.subscriber_priority;
+            p.group_order = fetch_params.group_order;
             return p;
         }
 

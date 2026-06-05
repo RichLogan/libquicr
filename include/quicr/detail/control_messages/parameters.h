@@ -80,6 +80,33 @@ namespace quicr::messages::control {
         return (expires.has_value() && expires.value() != 0) ? expires : std::nullopt;
     }
 
+    /// The §10.2 parameters common to both standalone and joining FETCH messages.
+    struct FetchParameters
+    {
+        std::vector<Token> auth_tokens;
+        std::optional<std::uint64_t> fill_timeout;
+        std::uint8_t subscriber_priority;
+        GroupOrder group_order;
+    };
+
+    /// Validate and resolve the parameters carried by a FETCH message, applying the
+    /// §10.2 defaults (subscriber priority 128, group order Ascending).
+    inline FetchParameters ResolveFetchParameters(const Parameters& params)
+    {
+        ValidateParameters(params,
+                           { ParameterType::kAuthorizationToken,
+                             ParameterType::kFillTimeout,
+                             ParameterType::kSubscriberPriority,
+                             ParameterType::kGroupOrder });
+
+        return FetchParameters{
+            .auth_tokens = CollectAuthTokens(params),
+            .fill_timeout = params.GetOptional<std::uint64_t>(ParameterType::kFillTimeout),
+            .subscriber_priority = params.GetOptional<std::uint8_t>(ParameterType::kSubscriberPriority).value_or(128),
+            .group_order = ResolveGroupOrder(params).value_or(GroupOrder::kAscending),
+        };
+    }
+
     /// Resolve whichever SUBSCRIPTION_FILTER parameter is present, else monostate (unfiltered).
     inline Filter ResolveFilter(const Parameters& params)
     {

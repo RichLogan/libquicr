@@ -836,3 +836,41 @@ TEST_CASE("StandaloneFetch resolves parameters and defaults")
         CHECK(msg.auth_tokens[0] == token);
     }
 }
+
+TEST_CASE("JoiningFetch resolves parameters and defaults")
+{
+    using namespace quicr::messages;
+    using namespace quicr::messages::control;
+
+    auto make_payload = [](const Parameters& params) {
+        Bytes payload;
+        payload << RequestID{ 1 };
+        payload << FetchType::kRelativeJoiningFetch;
+        payload << RequestID{ 2 };
+        payload << std::uint64_t{ 5 };
+        payload << params;
+        return payload;
+    };
+
+    SUBCASE("defaults apply when omitted")
+    {
+        const auto payload = make_payload(Parameters{});
+        const JoiningFetch msg{ BytesSpan{ payload } };
+        CHECK(msg.subscriber_priority == 128);
+        CHECK(msg.group_order == GroupOrder::kAscending);
+        CHECK_FALSE(msg.fill_timeout.has_value());
+        CHECK(msg.auth_tokens.empty());
+    }
+
+    SUBCASE("present parameters are resolved")
+    {
+        Parameters params;
+        params.Add(ParameterType::kFillTimeout, std::uint64_t{ 250 });
+        params.Add(ParameterType::kGroupOrder, std::uint8_t{ static_cast<std::uint8_t>(GroupOrder::kDescending) });
+        const auto payload = make_payload(params);
+        const JoiningFetch msg{ BytesSpan{ payload } };
+        REQUIRE(msg.fill_timeout.has_value());
+        CHECK(msg.fill_timeout.value() == 250);
+        CHECK(msg.group_order == GroupOrder::kDescending);
+    }
+}
