@@ -695,6 +695,36 @@ TEST_CASE("Subscribe resolves parameters and defaults")
     }
 }
 
+TEST_CASE("SubscribeTracks resolves FORWARD and auth tokens")
+{
+    using namespace quicr::messages;
+    using namespace quicr::messages::control;
+
+    auto make_payload = [](const Parameters& params) {
+        Bytes payload;
+        payload << RequestID{ 1 };
+        payload << kTrackNamespaceConf;
+        payload << params;
+        return payload;
+    };
+
+    SUBCASE("FORWARD defaults to true")
+    {
+        const auto payload = make_payload(Parameters{});
+        const SubscribeTracks msg{ BytesSpan{ payload } };
+        CHECK(msg.forward == true);
+        CHECK(msg.auth_tokens.empty());
+    }
+
+    SUBCASE("a non-token, non-forward parameter is rejected")
+    {
+        Parameters params;
+        params.Add(ParameterType::kExpires, std::uint64_t{ 1 });
+        const auto payload = make_payload(params);
+        CHECK_THROWS_AS(SubscribeTracks{ BytesSpan{ payload } }, ProtocolViolationException);
+    }
+}
+
 TEST_CASE("Publish resolves parameters and defaults")
 {
     using namespace quicr::messages;
