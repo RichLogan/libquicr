@@ -22,6 +22,53 @@ FromASCII(const std::string& ascii)
     return std::vector<uint8_t>(ascii.begin(), ascii.end());
 }
 
+TEST_CASE("Token round-trips for each alias type")
+{
+    using namespace quicr::messages;
+
+    SUBCASE("USE_VALUE carries type and value")
+    {
+        const Token in{ .alias_type = Token::AliasType::kUseValue,
+                        .token_alias = std::nullopt,
+                        .token_type = 7,
+                        .token_value = FromASCII("secret") };
+        Bytes buffer;
+        buffer << in;
+        BytesSpan span{ buffer };
+        Token out{};
+        span = span >> out;
+        CHECK(span.empty());
+        CHECK(out == in);
+    }
+
+    SUBCASE("REGISTER carries alias, type and value")
+    {
+        const Token in{ .alias_type = Token::AliasType::kRegister,
+                        .token_alias = 3,
+                        .token_type = 7,
+                        .token_value = FromASCII("secret") };
+        Bytes buffer;
+        buffer << in;
+        BytesSpan span{ buffer };
+        Token out{};
+        span = span >> out;
+        CHECK(span.empty());
+        CHECK(out == in);
+    }
+
+    SUBCASE("DELETE carries only an alias")
+    {
+        const Token in{ .alias_type = Token::AliasType::kDelete, .token_alias = 3 };
+        Bytes buffer;
+        buffer << in;
+        BytesSpan span{ buffer };
+        Token out{};
+        span = span >> out;
+        CHECK(span.empty());
+        CHECK(out == in);
+    }
+}
+
 const TrackNamespace kTrackNamespaceConf{ FromASCII("conf.example.com"), FromASCII("conf"), FromASCII("1") };
 const Bytes kTrackNameAliceVideo = FromASCII("alice/video");
 const UintVar kTrackAliasAliceVideo{ 0xA11CE };
