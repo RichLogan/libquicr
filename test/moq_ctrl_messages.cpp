@@ -921,3 +921,64 @@ TEST_CASE("RequestUpdate leaves omitted parameters unset")
         CHECK(msg.subscriber_priority.value() == 64);
     }
 }
+
+TEST_CASE("SubscribeOk resolves EXPIRES and LARGEST_OBJECT")
+{
+    using namespace quicr::messages;
+    using namespace quicr::messages::control;
+
+    auto make_payload = [](const Parameters& params) {
+        Bytes payload;
+        payload << TrackAlias{ 0xA11CE };
+        payload << params;
+        payload << TrackExtensions{};
+        return payload;
+    };
+
+    SUBCASE("omitted parameters are unset")
+    {
+        const auto payload = make_payload(Parameters{});
+        const SubscribeOk msg{ BytesSpan{ payload } };
+        CHECK_FALSE(msg.expires.has_value());
+        CHECK_FALSE(msg.largest_object.has_value());
+    }
+
+    SUBCASE("non-zero EXPIRES is resolved")
+    {
+        Parameters params;
+        params.Add(ParameterType::kExpires, std::uint64_t{ 1234 });
+        const auto payload = make_payload(params);
+        const SubscribeOk msg{ BytesSpan{ payload } };
+        REQUIRE(msg.expires.has_value());
+        CHECK(msg.expires.value() == 1234);
+    }
+
+    SUBCASE("EXPIRES of 0 resolves to no expiry")
+    {
+        Parameters params;
+        params.Add(ParameterType::kExpires, std::uint64_t{ 0 });
+        const auto payload = make_payload(params);
+        const SubscribeOk msg{ BytesSpan{ payload } };
+        CHECK_FALSE(msg.expires.has_value());
+    }
+
+    SUBCASE("LARGEST_OBJECT is resolved")
+    {
+        Parameters params;
+        Location loc{ .group = 99, .object = 123 };
+        params.Add(ParameterType::kLargestObject, loc);
+        const auto payload = make_payload(params);
+        const SubscribeOk msg{ BytesSpan{ payload } };
+        REQUIRE(msg.largest_object.has_value());
+        CHECK(msg.largest_object.value().group == 99);
+        CHECK(msg.largest_object.value().object == 123);
+    }
+
+    SUBCASE("invalid parameter is rejected")
+    {
+        Parameters params;
+        params.Add(ParameterType::kForward, std::uint8_t{ 1 });
+        const auto payload = make_payload(params);
+        CHECK_THROWS_AS(SubscribeOk{ BytesSpan{ payload } }, ProtocolViolationException);
+    }
+}
