@@ -1098,3 +1098,23 @@ TEST_CASE("OK messages have distinct parameter allow-lists")
         CHECK_FALSE(msg.largest_object.has_value());
     }
 }
+
+TEST_CASE("AUTHORIZATION_TOKEN may repeat in a single message")
+{
+    using namespace quicr::messages;
+    using namespace quicr::messages::control;
+
+    const Token first{ .alias_type = Token::AliasType::kUseValue, .token_type = 7, .token_value = FromASCII("a") };
+    const Token second{ .alias_type = Token::AliasType::kUseValue, .token_type = 7, .token_value = FromASCII("b") };
+
+    Parameters params;
+    params.Add(ParameterType::kAuthorizationToken, first);
+    params.Add(ParameterType::kAuthorizationToken, second);
+
+    Bytes payload;
+    payload << RequestID{ 1 } << kTrackNamespaceConf << params;
+    const SubscribeNamespace msg{ BytesSpan{ payload } };
+    REQUIRE(msg.auth_tokens.size() == 2);
+    CHECK(msg.auth_tokens[0] == first);
+    CHECK(msg.auth_tokens[1] == second);
+}
