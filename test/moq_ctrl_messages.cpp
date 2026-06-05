@@ -694,3 +694,78 @@ TEST_CASE("Subscribe resolves parameters and defaults")
         CHECK_THROWS_AS(Subscribe{ BytesSpan{ payload } }, ProtocolViolationException);
     }
 }
+
+TEST_CASE("Publish resolves parameters and defaults")
+{
+    using namespace quicr::messages;
+    using namespace quicr::messages::control;
+
+    auto make_payload = [](const Parameters& params) {
+        Bytes payload;
+        payload << RequestID{ 1 };
+        payload << kTrackNamespaceConf;
+        payload << kTrackNameAliceVideo;
+        payload << TrackAlias{ 0xA11CE };
+        payload << params;
+        payload << TrackExtensions{}; // track_properties, empty
+        return payload;
+    };
+
+    SUBCASE("defaults apply when omitted")
+    {
+        const auto payload = make_payload(Parameters{});
+        const Publish msg{ BytesSpan{ payload } };
+        CHECK(msg.forward == true);
+        CHECK_FALSE(msg.expires.has_value());
+        CHECK_FALSE(msg.largest_object.has_value());
+        CHECK(msg.auth_tokens.empty());
+    }
+
+    SUBCASE("EXPIRES of 0 resolves to no expiry")
+    {
+        Parameters params;
+        params.Add(ParameterType::kExpires, std::uint64_t{ 0 });
+        const auto payload = make_payload(params);
+        const Publish msg{ BytesSpan{ payload } };
+        CHECK_FALSE(msg.expires.has_value());
+    }
+
+    SUBCASE("non-zero EXPIRES is resolved")
+    {
+        Parameters params;
+        params.Add(ParameterType::kExpires, std::uint64_t{ 5000 });
+        const auto payload = make_payload(params);
+        const Publish msg{ BytesSpan{ payload } };
+        REQUIRE(msg.expires.has_value());
+        CHECK(msg.expires.value() == 5000);
+    }
+
+    SUBCASE("LARGEST_OBJECT is resolved")
+    {
+        Parameters params;
+        Location loc{ .group = 10, .object = 20 };
+        params.Add(ParameterType::kLargestObject, loc);
+        const auto payload = make_payload(params);
+        const Publish msg{ BytesSpan{ payload } };
+        REQUIRE(msg.largest_object.has_value());
+        CHECK(msg.largest_object.value().group == 10);
+        CHECK(msg.largest_object.value().object == 20);
+    }
+
+    SUBCASE("FORWARD is resolved")
+    {
+        Parameters params;
+        params.Add(ParameterType::kForward, std::uint8_t{ 0 });
+        const auto payload = make_payload(params);
+        const Publish msg{ BytesSpan{ payload } };
+        CHECK(msg.forward == false);
+    }
+
+    SUBCASE("a SUBSCRIBE-only parameter is rejected")
+    {
+        Parameters params;
+        params.Add(ParameterType::kRendezvousTimeout, std::uint64_t{ 10 });
+        const auto payload = make_payload(params);
+        CHECK_THROWS_AS(Publish{ BytesSpan{ payload } }, ProtocolViolationException);
+    }
+}
