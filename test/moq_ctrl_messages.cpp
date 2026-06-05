@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2024 Cisco Systems
 // SPDX-License-Identifier: BSD-2-Clause
 
+#include "quicr/detail/control_messages.h"
 #include "quicr/detail/message.h"
 #include "quicr/detail/messages.h"
 
@@ -619,4 +620,29 @@ TEST_CASE("Parameters - Filters")
 
     auto recv_filter = recv_params.GetFilter(FilterType::kTrackFilter);
     CHECK_EQ(recv_filter, filter);
+}
+
+TEST_CASE("ValidateParameters enforces the allow-list")
+{
+    using namespace quicr::messages;
+    using namespace quicr::messages::control;
+
+    SUBCASE("a parameter outside the allow-list throws")
+    {
+        const Parameters params{ { ParameterType::kForward, Bytes{ 0x1 } } };
+        CHECK_THROWS_AS(ValidateParameters(params, { ParameterType::kExpires }), ProtocolViolationException);
+    }
+
+    SUBCASE("an unexpected duplicate throws")
+    {
+        const Parameters params{ { ParameterType::kForward, Bytes{ 0x1 } }, { ParameterType::kForward, Bytes{ 0x1 } } };
+        CHECK_THROWS_AS(ValidateParameters(params, { ParameterType::kForward }), ProtocolViolationException);
+    }
+
+    SUBCASE("a repeated AUTHORIZATION_TOKEN is allowed")
+    {
+        const Parameters params{ { ParameterType::kAuthorizationToken, Bytes{ 0x3, 0x1 } },
+                                 { ParameterType::kAuthorizationToken, Bytes{ 0x3, 0x2 } } };
+        CHECK_NOTHROW(ValidateParameters(params, { ParameterType::kAuthorizationToken }));
+    }
 }
