@@ -72,8 +72,7 @@ namespace quicr::messages::control {
                                  ParameterType::kForward });
 
             p.auth_tokens = CollectAuthTokens(params);
-            const auto expires = params.GetOptional<std::uint64_t>(ParameterType::kExpires);
-            p.expires = (expires.has_value() && expires.value() != 0) ? expires : std::nullopt;
+            p.expires = ResolveExpires(params);
             p.largest_object = params.GetOptional<Location>(ParameterType::kLargestObject);
             p.forward = ResolveForward(params, true);
             return p;

@@ -73,6 +73,13 @@ namespace quicr::messages::control {
         return static_cast<GroupOrder>(value);
     }
 
+    /// Resolve the EXPIRES parameter (0x08). Absent or 0 both mean "no expiry" (nullopt).
+    inline std::optional<std::uint64_t> ResolveExpires(const Parameters& params)
+    {
+        const auto expires = params.GetOptional<std::uint64_t>(ParameterType::kExpires);
+        return (expires.has_value() && expires.value() != 0) ? expires : std::nullopt;
+    }
+
     /// Resolve whichever SUBSCRIPTION_FILTER parameter is present, else monostate (unfiltered).
     inline Filter ResolveFilter(const Parameters& params)
     {
