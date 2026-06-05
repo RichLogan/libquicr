@@ -769,3 +769,70 @@ TEST_CASE("Publish resolves parameters and defaults")
         CHECK_THROWS_AS(Publish{ BytesSpan{ payload } }, ProtocolViolationException);
     }
 }
+
+TEST_CASE("StandaloneFetch resolves parameters and defaults")
+{
+    using namespace quicr::messages;
+    using namespace quicr::messages::control;
+
+    auto make_payload = [](const Parameters& params) {
+        Bytes payload;
+        payload << RequestID{ 1 };
+        payload << FetchType::kStandalone;
+        payload << kTrackNamespaceConf;
+        payload << kTrackNameAliceVideo;
+        payload << Location{ 0, 0 };
+        payload << Location{ 1, 0 };
+        payload << params;
+        return payload;
+    };
+
+    SUBCASE("defaults apply when omitted")
+    {
+        const auto payload = make_payload(Parameters{});
+        const StandaloneFetch msg{ BytesSpan{ payload } };
+        CHECK(msg.subscriber_priority == 128);
+        CHECK(msg.group_order == GroupOrder::kAscending);
+        CHECK_FALSE(msg.fill_timeout.has_value());
+        CHECK(msg.auth_tokens.empty());
+    }
+
+    SUBCASE("FILL_TIMEOUT is resolved")
+    {
+        Parameters params;
+        params.Add(ParameterType::kFillTimeout, std::uint64_t{ 250 });
+        const auto payload = make_payload(params);
+        const StandaloneFetch msg{ BytesSpan{ payload } };
+        REQUIRE(msg.fill_timeout.has_value());
+        CHECK(msg.fill_timeout.value() == 250);
+    }
+
+    SUBCASE("SUBSCRIBER_PRIORITY is resolved")
+    {
+        Parameters params;
+        params.Add(ParameterType::kSubscriberPriority, std::uint8_t{ 64 });
+        const auto payload = make_payload(params);
+        const StandaloneFetch msg{ BytesSpan{ payload } };
+        CHECK(msg.subscriber_priority == 64);
+    }
+
+    SUBCASE("GROUP_ORDER is resolved")
+    {
+        Parameters params;
+        params.Add(ParameterType::kGroupOrder, std::uint8_t{ static_cast<std::uint8_t>(GroupOrder::kDescending) });
+        const auto payload = make_payload(params);
+        const StandaloneFetch msg{ BytesSpan{ payload } };
+        CHECK(msg.group_order == GroupOrder::kDescending);
+    }
+
+    SUBCASE("AUTH_TOKEN is collected")
+    {
+        Parameters params;
+        Token token{ .alias_type = Token::AliasType::kUseValue, .token_type = 7, .token_value = FromASCII("secret") };
+        params.Add(ParameterType::kAuthorizationToken, token);
+        const auto payload = make_payload(params);
+        const StandaloneFetch msg{ BytesSpan{ payload } };
+        REQUIRE(msg.auth_tokens.size() == 1);
+        CHECK(msg.auth_tokens[0] == token);
+    }
+}

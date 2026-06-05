@@ -4,6 +4,7 @@
 #pragma once
 
 #include "quicr/detail/control_messages/message_reader.h"
+#include "quicr/detail/control_messages/parameters.h"
 #include "quicr/detail/ctrl_message_types.h"
 #include "quicr/track_name.h"
 
@@ -21,24 +22,67 @@ namespace quicr::messages::control {
         const TrackName track_name;
         const Location start;
         const Location end;
-        const Parameters parameters;
+        const std::vector<Token> auth_tokens;
+        const std::optional<std::uint64_t> fill_timeout;
+        const std::uint8_t subscriber_priority;
+        const GroupOrder group_order;
 
         explicit StandaloneFetch(BytesSpan payload)
-          : StandaloneFetch(MessageReader{ payload })
+          : StandaloneFetch(Parse(MessageReader{ payload }))
         {
         }
 
       private:
-        explicit StandaloneFetch(MessageReader reader)
-          : request_id(reader.Read<RequestID>())
-          , fetch_type(ReadFetchType(reader))
-          , track_namespace(reader.Read<TrackNamespace>())
-          , track_name(reader.Read<TrackName>())
-          , start(reader.Read<Location>())
-          , end(reader.Read<Location>())
-          , parameters(reader.Read<Parameters>())
+        struct Parsed
         {
+            RequestID request_id;
+            FetchType fetch_type;
+            TrackNamespace track_namespace;
+            TrackName track_name;
+            Location start;
+            Location end;
+            std::vector<Token> auth_tokens;
+            std::optional<std::uint64_t> fill_timeout;
+            std::uint8_t subscriber_priority;
+            GroupOrder group_order;
+        };
+
+        explicit StandaloneFetch(Parsed p)
+          : request_id(p.request_id)
+          , fetch_type(p.fetch_type)
+          , track_namespace(std::move(p.track_namespace))
+          , track_name(std::move(p.track_name))
+          , start(p.start)
+          , end(p.end)
+          , auth_tokens(std::move(p.auth_tokens))
+          , fill_timeout(p.fill_timeout)
+          , subscriber_priority(p.subscriber_priority)
+          , group_order(p.group_order)
+        {
+        }
+
+        static Parsed Parse(MessageReader reader)
+        {
+            Parsed p;
+            p.request_id = reader.Read<RequestID>();
+            p.fetch_type = ReadFetchType(reader);
+            p.track_namespace = reader.Read<TrackNamespace>();
+            p.track_name = reader.Read<TrackName>();
+            p.start = reader.Read<Location>();
+            p.end = reader.Read<Location>();
+            const auto params = reader.Read<Parameters>();
             reader.ExpectDone();
+
+            ValidateParameters(params,
+                               { ParameterType::kAuthorizationToken,
+                                 ParameterType::kFillTimeout,
+                                 ParameterType::kSubscriberPriority,
+                                 ParameterType::kGroupOrder });
+            p.auth_tokens = CollectAuthTokens(params);
+            p.fill_timeout = params.GetOptional<std::uint64_t>(ParameterType::kFillTimeout);
+            p.subscriber_priority = params.GetOptional<std::uint8_t>(ParameterType::kSubscriberPriority).value_or(128);
+            p.group_order = ResolveGroupOrder(params).value_or(GroupOrder::kAscending);
+            return p;
         }
 
         static FetchType ReadFetchType(MessageReader& reader)
@@ -61,22 +105,61 @@ namespace quicr::messages::control {
         const FetchType fetch_type;
         const RequestID joining_request_id;
         const std::uint64_t joining_start;
-        const Parameters parameters;
+        const std::vector<Token> auth_tokens;
+        const std::optional<std::uint64_t> fill_timeout;
+        const std::uint8_t subscriber_priority;
+        const GroupOrder group_order;
 
         explicit JoiningFetch(BytesSpan payload)
-          : JoiningFetch(MessageReader{ payload })
+          : JoiningFetch(Parse(MessageReader{ payload }))
         {
         }
 
       private:
-        explicit JoiningFetch(MessageReader reader)
-          : request_id(reader.Read<RequestID>())
-          , fetch_type(ReadJoiningFetchType(reader))
-          , joining_request_id(reader.Read<RequestID>())
-          , joining_start(reader.Read<std::uint64_t>())
-          , parameters(reader.Read<Parameters>())
+        struct Parsed
         {
+            RequestID request_id;
+            FetchType fetch_type;
+            RequestID joining_request_id;
+            std::uint64_t joining_start;
+            std::vector<Token> auth_tokens;
+            std::optional<std::uint64_t> fill_timeout;
+            std::uint8_t subscriber_priority;
+            GroupOrder group_order;
+        };
+
+        explicit JoiningFetch(Parsed p)
+          : request_id(p.request_id)
+          , fetch_type(p.fetch_type)
+          , joining_request_id(p.joining_request_id)
+          , joining_start(p.joining_start)
+          , auth_tokens(std::move(p.auth_tokens))
+          , fill_timeout(p.fill_timeout)
+          , subscriber_priority(p.subscriber_priority)
+          , group_order(p.group_order)
+        {
+        }
+
+        static Parsed Parse(MessageReader reader)
+        {
+            Parsed p;
+            p.request_id = reader.Read<RequestID>();
+            p.fetch_type = ReadJoiningFetchType(reader);
+            p.joining_request_id = reader.Read<RequestID>();
+            p.joining_start = reader.Read<std::uint64_t>();
+            const auto params = reader.Read<Parameters>();
             reader.ExpectDone();
+
+            ValidateParameters(params,
+                               { ParameterType::kAuthorizationToken,
+                                 ParameterType::kFillTimeout,
+                                 ParameterType::kSubscriberPriority,
+                                 ParameterType::kGroupOrder });
+            p.auth_tokens = CollectAuthTokens(params);
+            p.fill_timeout = params.GetOptional<std::uint64_t>(ParameterType::kFillTimeout);
+            p.subscriber_priority = params.GetOptional<std::uint8_t>(ParameterType::kSubscriberPriority).value_or(128);
+            p.group_order = ResolveGroupOrder(params).value_or(GroupOrder::kAscending);
+            return p;
         }
 
         static FetchType ReadJoiningFetchType(MessageReader& reader)
@@ -94,7 +177,7 @@ namespace quicr::messages::control {
     };
 
     using Fetch = std::variant<StandaloneFetch, JoiningFetch>;
-    Fetch ReadFetch(BytesSpan payload)
+    inline Fetch ReadFetch(BytesSpan payload)
     {
         auto reader = MessageReader{ payload };
         // TODO: We don't need to re-read these after we read them here.
