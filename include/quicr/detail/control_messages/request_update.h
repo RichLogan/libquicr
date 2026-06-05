@@ -81,9 +81,7 @@ namespace quicr::messages::control {
             p.subgroup_delivery_timeout = params.GetOptional<std::uint64_t>(ParameterType::kSubgroupDeliveryTimeout);
             p.subscriber_priority = params.GetOptional<std::uint8_t>(ParameterType::kSubscriberPriority);
 
-            if (params.Contains(ParameterType::kLocationFilter) || params.Contains(ParameterType::kSubgroupFilter) ||
-                params.Contains(ParameterType::kObjectFilter) || params.Contains(ParameterType::kPriorityFilter) ||
-                params.Contains(ParameterType::kPropertyFilter) || params.Contains(ParameterType::kTrackFilter)) {
+            if (ContainsAnyFilter(params)) {
                 p.subscription_filter = ResolveFilter(params);
             }
 

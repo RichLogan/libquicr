@@ -107,13 +107,23 @@ namespace quicr::messages::control {
         };
     }
 
+    /// The SUBSCRIPTION_FILTER variants; at most one may appear in a message.
+    inline constexpr FilterType kFilterTypes[] = {
+        FilterType::kLocationFilter, FilterType::kSubgroupFilter, FilterType::kObjectFilter,
+        FilterType::kPriorityFilter, FilterType::kPropertyFilter, FilterType::kTrackFilter,
+    };
+
+    /// True if any SUBSCRIPTION_FILTER variant is present.
+    inline bool ContainsAnyFilter(const Parameters& params)
+    {
+        return std::any_of(std::begin(kFilterTypes), std::end(kFilterTypes), [&](const auto filter_type) {
+            return params.Contains(ToParameterFilterType(filter_type));
+        });
+    }
+
     /// Resolve whichever SUBSCRIPTION_FILTER parameter is present, else monostate (unfiltered).
     inline Filter ResolveFilter(const Parameters& params)
     {
-        static constexpr FilterType kFilterTypes[] = {
-            FilterType::kLocationFilter, FilterType::kSubgroupFilter, FilterType::kObjectFilter,
-            FilterType::kPriorityFilter, FilterType::kPropertyFilter, FilterType::kTrackFilter,
-        };
         for (const auto filter_type : kFilterTypes) {
             if (params.Contains(ToParameterFilterType(filter_type))) {
                 return params.GetFilter(filter_type);

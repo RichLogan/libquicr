@@ -907,4 +907,17 @@ TEST_CASE("RequestUpdate leaves omitted parameters unset")
         REQUIRE(msg.forward.has_value());
         CHECK(msg.forward.value() == false);
     }
+
+    SUBCASE("present scalar parameters resolve to set optionals")
+    {
+        Parameters params;
+        params.Add(ParameterType::kDeliveryTimeout, std::uint64_t{ 1500 });
+        params.Add(ParameterType::kSubscriberPriority, std::uint8_t{ 64 });
+        const auto payload = make_payload(params);
+        const RequestUpdate msg{ BytesSpan{ payload } };
+        REQUIRE(msg.object_delivery_timeout.has_value());
+        CHECK(msg.object_delivery_timeout.value() == 1500);
+        REQUIRE(msg.subscriber_priority.has_value());
+        CHECK(msg.subscriber_priority.value() == 64);
+    }
 }
