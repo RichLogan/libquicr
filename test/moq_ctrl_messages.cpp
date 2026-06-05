@@ -874,3 +874,37 @@ TEST_CASE("JoiningFetch resolves parameters and defaults")
         CHECK(msg.group_order == GroupOrder::kDescending);
     }
 }
+
+TEST_CASE("RequestUpdate leaves omitted parameters unset")
+{
+    using namespace quicr::messages;
+    using namespace quicr::messages::control;
+
+    auto make_payload = [](const Parameters& params) {
+        Bytes payload;
+        payload << RequestID{ 1 };
+        payload << params;
+        return payload;
+    };
+
+    SUBCASE("all parameters optional when omitted")
+    {
+        const auto payload = make_payload(Parameters{});
+        const RequestUpdate msg{ BytesSpan{ payload } };
+        CHECK_FALSE(msg.subscriber_priority.has_value());
+        CHECK_FALSE(msg.forward.has_value());
+        CHECK_FALSE(msg.new_group_request.has_value());
+        CHECK_FALSE(msg.track_namespace_prefix.has_value());
+        CHECK(msg.auth_tokens.empty());
+    }
+
+    SUBCASE("present FORWARD resolves to a set optional")
+    {
+        Parameters params;
+        params.Add(ParameterType::kForward, std::uint8_t{ 0 });
+        const auto payload = make_payload(params);
+        const RequestUpdate msg{ BytesSpan{ payload } };
+        REQUIRE(msg.forward.has_value());
+        CHECK(msg.forward.value() == false);
+    }
+}
