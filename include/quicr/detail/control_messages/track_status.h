@@ -4,6 +4,7 @@
 #pragma once
 
 #include "quicr/detail/control_messages/message_reader.h"
+#include "quicr/detail/control_messages/parameters.h"
 
 namespace quicr::messages::control {
 
@@ -14,21 +15,42 @@ namespace quicr::messages::control {
         const RequestID request_id;
         const TrackNamespace track_namespace;
         const TrackName track_name;
-        const Parameters parameters;
+        const std::vector<Token> auth_tokens;
 
         explicit TrackStatus(BytesSpan payload)
-          : TrackStatus(MessageReader{ payload })
+          : TrackStatus(Parse(MessageReader{ payload }))
         {
         }
 
       private:
-        explicit TrackStatus(MessageReader reader)
-          : request_id(reader.Read<RequestID>())
-          , track_namespace(reader.Read<TrackNamespace>())
-          , track_name(reader.Read<TrackName>())
-          , parameters(reader.Read<Parameters>())
+        struct Parsed
         {
+            RequestID request_id;
+            TrackNamespace track_namespace;
+            TrackName track_name;
+            std::vector<Token> auth_tokens;
+        };
+
+        explicit TrackStatus(Parsed p)
+          : request_id(p.request_id)
+          , track_namespace(std::move(p.track_namespace))
+          , track_name(std::move(p.track_name))
+          , auth_tokens(std::move(p.auth_tokens))
+        {
+        }
+
+        static Parsed Parse(MessageReader reader)
+        {
+            Parsed p;
+            p.request_id = reader.Read<RequestID>();
+            p.track_namespace = reader.Read<TrackNamespace>();
+            p.track_name = reader.Read<TrackName>();
+            const auto params = reader.Read<Parameters>();
             reader.ExpectDone();
+
+            ValidateParameters(params, { ParameterType::kAuthorizationToken });
+            p.auth_tokens = CollectAuthTokens(params);
+            return p;
         }
     };
 

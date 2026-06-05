@@ -1012,3 +1012,40 @@ TEST_CASE("SubscribeOk resolves EXPIRES and LARGEST_OBJECT")
         CHECK_THROWS_AS(SubscribeOk{ BytesSpan{ payload } }, ProtocolViolationException);
     }
 }
+
+TEST_CASE("Auth-token-only messages collect tokens and reject others")
+{
+    using namespace quicr::messages;
+    using namespace quicr::messages::control;
+
+    Parameters with_token;
+    Token token{ .alias_type = Token::AliasType::kUseValue, .token_type = 7, .token_value = FromASCII("sec") };
+    with_token.Add(ParameterType::kAuthorizationToken, token);
+
+    SUBCASE("TrackStatus collects the token")
+    {
+        Bytes payload;
+        payload << RequestID{ 1 } << kTrackNamespaceConf << kTrackNameAliceVideo << with_token;
+        const TrackStatus msg{ BytesSpan{ payload } };
+        REQUIRE(msg.auth_tokens.size() == 1);
+        CHECK(msg.auth_tokens[0] == token);
+    }
+
+    SUBCASE("PublishNamespace rejects a non-token parameter")
+    {
+        Parameters bad;
+        bad.Add(ParameterType::kForward, std::uint8_t{ 1 });
+        Bytes payload;
+        payload << RequestID{ 1 } << kTrackNamespaceConf << bad;
+        CHECK_THROWS_AS(PublishNamespace{ BytesSpan{ payload } }, ProtocolViolationException);
+    }
+
+    SUBCASE("SubscribeNamespace collects the token")
+    {
+        Bytes payload;
+        payload << RequestID{ 1 } << kTrackNamespaceConf << with_token;
+        const SubscribeNamespace msg{ BytesSpan{ payload } };
+        REQUIRE(msg.auth_tokens.size() == 1);
+        CHECK(msg.auth_tokens[0] == token);
+    }
+}
