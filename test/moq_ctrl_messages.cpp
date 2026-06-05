@@ -1049,3 +1049,52 @@ TEST_CASE("Auth-token-only messages collect tokens and reject others")
         CHECK(msg.auth_tokens[0] == token);
     }
 }
+
+TEST_CASE("OK messages have distinct parameter allow-lists")
+{
+    using namespace quicr::messages;
+    using namespace quicr::messages::control;
+
+    auto make_payload = [](const Parameters& params) {
+        Bytes payload;
+        payload << params;
+        payload << TrackExtensions{};
+        return payload;
+    };
+
+    SUBCASE("PublishOk resolves its defaults")
+    {
+        const auto payload = make_payload(Parameters{});
+        const PublishOk msg{ BytesSpan{ payload } };
+        CHECK(msg.subscriber_priority == 128);
+        CHECK(msg.forward == true);
+        CHECK_FALSE(msg.expires.has_value());
+    }
+
+    SUBCASE("TrackStatusOk rejects EXPIRES")
+    {
+        Parameters params;
+        params.Add(ParameterType::kExpires, std::uint64_t{ 1 });
+        const auto payload = make_payload(params);
+        CHECK_THROWS_AS(TrackStatusOk{ BytesSpan{ payload } }, ProtocolViolationException);
+    }
+
+    SUBCASE("PublishNamespaceOk accepts no parameters")
+    {
+        Parameters params;
+        params.Add(ParameterType::kForward, std::uint8_t{ 1 });
+        const auto payload = make_payload(params);
+        CHECK_THROWS_AS(PublishNamespaceOk{ BytesSpan{ payload } }, ProtocolViolationException);
+    }
+
+    SUBCASE("RequestUpdateOk resolves EXPIRES and LARGEST_OBJECT")
+    {
+        Parameters params;
+        params.Add(ParameterType::kExpires, std::uint64_t{ 42 });
+        const auto payload = make_payload(params);
+        const RequestUpdateOk msg{ BytesSpan{ payload } };
+        REQUIRE(msg.expires.has_value());
+        CHECK(msg.expires.value() == 42);
+        CHECK_FALSE(msg.largest_object.has_value());
+    }
+}
